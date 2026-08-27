@@ -172,7 +172,6 @@ Web Application là ứng dụng chạy trên server và được người dùng
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Theo ngôn ngữ/framework | PHP (Laravel, Symfony), Java (Spring Boot), Python (Django, Flask), Node.js (Express, NestJS), .NET (ASP.NET Core) |
 | Theo kiến trúc hệ thống | Monolithic Application, Microservices Architecture                                                                 |
-| Theo kiến trúc hiển thị | Server-Side Rendering (SSR), Single Page Application (SPA)                                                         |
 
 ## Mối quan hệ giữa Web Server và Web Application
 
