@@ -1,0 +1,202 @@
+# web-front-door
+
+<figure><img src="../.gitbook/assets/image (626).png" alt=""><figcaption></figcaption></figure>
+
+## **ANALYZE**
+
+<figure><img src="../.gitbook/assets/image (627).png" alt=""><figcaption></figcaption></figure>
+
+Các chức năng của trang web có vẻ không có j nổi bật ngoài tạo tài khoản và xem các sản phẩm ,
+
+Theo mô tả của đề bài thì mục tiêu của ta sẽ là cố gắng leo thang đặc quyền để trở thành admin.
+
+ở trong tệp /robots.txt , tôi đã tìm thấy 1 số thứ khá hay ho -))
+
+đây là 1 loại mã hóa khá đơn giản
+
+```
+User-agent: * 
+Disallow: 
+
+# Gonna jot the encryption scheme I use down for later -The Incredible Admin
+#
+# def encrypt(inp):
+#   enc = [13]
+#   for i in range(len(inp)):
+#     enc.append(ord(inp[i]) ^ 42)
+#   return enc[1:]
+```
+
+và tôi đã tìm thấy mảnh ghép quan trọng thứ 2 để solve bài này ở mục product
+
+```
+Revolutionary new Hashing Algorithm!!!
+Made by our site's very own admin over many hours of work! It's so good that they decided to use it any time they need a hash!
+        def has(inp):
+            hashed = ""
+            key = jwt_key
+            for i in range(64):
+                hashed = hashed + hash_char(inp[i % len(inp)], key[i % len(key)])
+            return hashed
+
+        def hash_char(hash_char, key_char):
+            return chr(pow(ord(hash_char), ord(key_char), 26) + 65)
+    
+```
+
+Từ 2 đoạn mã này , ta có thể hiểu rằng là : bài này chính là 1 dạng JWT , chúng ta sẽ phải sửa lại JWT để trở thành admin
+
+sau khi tôi thử tạo 1 tài khoản bất kì , tôi đã nhận được 1 cookie :
+
+<figure><img src="../.gitbook/assets/image (628).png" alt=""><figcaption></figcaption></figure>
+
+Và mục tiêu của chúng ta chính là đổi mục `"admin": "false"` trở thành `"admin": "true"`
+
+Và bên trên có chính là thuật toán mã hóa JWT tự chế của tác giả -)) Bây giờ chúng ta phải từ cookie vừa có được , đi ngược lại để tìm ra được JWT-key
+
+## **EXPLOIT**
+
+
+
+Và tôi đã nhờ chatgpt viết script tự động hóa việc tìm ra jwt\_key và gen ra cookie mới để leo thang đặc quyền lên admin :
+
+```
+import base64
+import json
+import string
+
+# ------------------------------------
+# Helper functions
+
+# Base64 URL-safe without padding
+def b64url_encode(data):
+    return base64.urlsafe_b64encode(data).decode().rstrip('=')
+
+def b64url_decode(data):
+    padding = '=' * (4 - len(data) % 4)
+    return base64.urlsafe_b64decode(data + padding)
+
+# hash_char from challenge
+def hash_char(hash_char, key_char):
+    return chr(pow(ord(hash_char), ord(key_char), 26) + 65)
+
+# ------------------------------------
+# Given JWT
+jwt = "eyJhbGciOiAiQURNSU5IQVNIIiwgInR5cCI6ICJKV1QifQ.eyJ1c2VybmFtZSI6ICJzIiwgInBhc3N3b3JkIjogInMiLCAiYWRtaW4iOiAiZmFsc2UifQ.JZOAYHBBBBNBDDQABXBFJOABZBLBBSOBVLBWVBQRSJJBOJYXDQZBEIRQBSOOFFWB"
+
+header_b64, payload_b64, signature = jwt.split('.')
+
+# inp = header_b64.payload_b64
+inp = header_b64 + '.' + payload_b64
+
+# ------------------------------------
+# Brute force jwt_key
+
+key_len = 64
+possible_chars = string.printable  # All printable ASCII characters
+
+jwt_key = ''
+
+print("Brute forcing jwt_key...")
+for i in range(key_len):
+    target_char = signature[i]
+    inp_char = inp[i % len(inp)]
+    
+    found = False
+    for c in possible_chars:
+        if hash_char(inp_char, c) == target_char:
+            jwt_key += c
+            found = True
+            break
+    
+    if not found:
+        print(f"[!] Could not find key_char for position {i}")
+        jwt_key += '?'  # Placeholder in case of failure
+    
+    print(f"Position {i}: found key_char = {jwt_key[-1]!r}")
+
+print(f"\nRecovered jwt_key:\n{jwt_key}")
+
+# ------------------------------------
+# Forge new JWT with admin=true
+
+new_payload = {
+    "username": "admin",
+    "password": "whatever",
+    "admin": "true"
+}
+
+# Re-encode
+new_payload_b64 = b64url_encode(json.dumps(new_payload, separators=(',', ':')).encode())
+new_inp = header_b64 + '.' + new_payload_b64
+
+# Recompute signature
+new_signature = ''
+for i in range(64):
+    new_signature += hash_char(new_inp[i % len(new_inp)], jwt_key[i % len(jwt_key)])
+
+# Final forged JWT
+forged_jwt = f"{header_b64}.{new_payload_b64}.{new_signature}"
+
+print("\n[+] Forged JWT:")
+print(forged_jwt)
+
+
+```
+
+kết quả trả về :
+
+```
+eyJhbGciOiAiQURNSU5IQVNIIiwgInR5cCI6ICJKV1QifQ.eyJ1c2VybmFtZSI6ImFkbWluIiwicGFzc3dvcmQiOiJ3aGF0ZXZlciIsImFkbWluIjoidHJ1ZSJ9.JZOAYHBBBBNBDDQABXBFJOABZBLBBSOBVLBWVBQRSJJBOJYXDQZBEIRQBSOOFFWB
+```
+
+<figure><img src="../.gitbook/assets/image (629).png" alt=""><figcaption></figcaption></figure>
+
+Sau khi ném JWT mới vào cookie thì ta đã vào được giao diện của admin :
+
+<figure><img src="../.gitbook/assets/image (630).png" alt=""><figcaption></figcaption></figure>
+
+Khi vào tới mục To-Do , ta thấy có 4 đoạn mã hex :
+
+<figure><img src="../.gitbook/assets/image (631).png" alt=""><figcaption></figcaption></figure>
+
+việc tiếp theo là dịch nó ra thì đơn giản rồi :
+
+```
+def decrypt(enc_list):
+    return ''.join(chr(c ^ 42) for c in enc_list)
+
+# Data
+lists = [
+    [108, 67, 82, 10, 77, 70, 67, 94, 73, 66, 79, 89],
+    [107, 78, 92, 79, 88, 94, 67, 89, 79, 10, 73, 69, 71, 90, 75, 68, 83],
+    [105, 88, 79, 75, 94, 79, 10, 8, 72, 95, 89, 67, 68, 79, 89, 89, 117, 89, 79, 73, 88, 79, 94, 89, 8, 10, 90, 75, 77, 79, 10, 7, 7, 10, 71, 75, 78, 79, 10, 67, 94, 10, 72, 95, 94, 10, 68, 69, 10, 72, 95, 94, 94, 69, 68, 10, 94, 69, 10, 75, 73, 73, 79, 89, 89, 10, 83, 79, 94],
+    [126, 75, 65, 79, 10, 69, 92, 79, 88, 10, 94, 66, 79, 10, 93, 69, 88, 70, 78, 10, 7, 7, 10, 75, 70, 71, 69, 89, 94, 10, 78, 69, 68, 79]
+]
+
+# Giải mã từng dòng
+for i, l in enumerate(lists):
+    text = decrypt(l)
+    print(f"[Line {i+1}] {text}")
+
+```
+
+```
+[Line 1] Fix glitches
+[Line 2] Advertise company
+[Line 3] Create "business_secrets" page -- made it but no button to access yet
+[Line 4] Take over the world -- almost done
+```
+
+Vậy có nghĩa là flag đang nằm ở path `business_secrets`
+
+<figure><img src="../.gitbook/assets/image (632).png" alt=""><figcaption></figcaption></figure>
+
+## **FLAG**
+
+
+
+```
+tjctf{buy_h1gh_s3l1_l0w}
+```
+
