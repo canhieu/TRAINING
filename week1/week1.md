@@ -225,8 +225,7 @@ Client/Browser
   - HTTP
   - Reverse Proxy
   - FastCGI
-  - WSGI / ASGI
-  - Unix Socket hoặc TCP Socket
+  - ...
 
 - Web Application ↔ Database:
   - Thông qua database protocol hoặc driver
